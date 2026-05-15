@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Même feuille de style que l’échantillon basic -->
+    <link rel="stylesheet" href="../basic/css/basic.css" />
+    <style>
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        background-color: #fcfcfc;
+        margin: 0;
+        padding: 0;
+      }
+      .flipbook-viewport .container {
+        width: 100%;
+        height: 100%;
+      }
+      .flipbook-viewport .flipbook {
+        margin: 0 auto;
+      }
+      .flip-rounded-pages .flipbook .page {
+        border-radius: 12px !important;
+        overflow: hidden !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="flipbook-viewport">
+      <div class="container">
+        <div class="flipbook"></div>
+      </div>
+    </div>
+
+    <script src="../../extras/jquery.min.1.7.js"></script>
+    <script src="../../lib/turn.min.js"></script>
+    <script>
+      /** Même conventions que Turn.js Basic : enfants avec background-image uniquement ; turn({ width,height, elevation, gradients, autoCenter }). */
+      function isChrome() {
+        return navigator.userAgent.indexOf('Chrome') !== -1
+      }
+
+      function isSafeBackgroundImageUrl(url) {
+        if (typeof url !== 'string') return false
+        var u = url.trim()
+        return (
+          /^https:\/\//i.test(u) ||
+          /^http:\/\//i.test(u) ||
+          u.indexOf('/') === 0 ||
+          u.indexOf('./') === 0 ||
+          u.indexOf('../') === 0
+        )
+      }
+
+      function applyEditorChrome(appearance) {
+        var body = document.body
+        var html = document.documentElement
+        if (!appearance || typeof appearance !== 'object') {
+          body.style.backgroundImage = 'none'
+          body.style.backgroundSize = ''
+          body.style.backgroundPosition = ''
+          body.style.backgroundRepeat = ''
+          body.style.backgroundColor = '#fcfcfc'
+          html.style.backgroundColor = '#fcfcfc'
+          return
+        }
+        var bgColor =
+          typeof appearance.backgroundColor === 'string'
+            ? appearance.backgroundColor.trim()
+            : ''
+        var rawImg =
+          typeof appearance.backgroundImage === 'string'
+            ? appearance.backgroundImage.trim()
+            : ''
+        var bgImage = rawImg && isSafeBackgroundImageUrl(rawImg) ? rawImg : ''
+
+        if (bgImage) {
+          body.style.backgroundImage = 'url(' + JSON.stringify(bgImage) + ')'
+          body.style.backgroundSize = 'cover'
+          body.style.backgroundPosition = 'center center'
+          body.style.backgroundRepeat = 'no-repeat'
+        } else {
+          body.style.backgroundImage = 'none'
+          body.style.backgroundSize = ''
+          body.style.backgroundPosition = ''
+          body.style.backgroundRepeat = ''
+        }
+
+        if (bgColor) {
+          body.style.backgroundColor = bgColor
+          html.style.backgroundColor = bgColor
+        } else if (!bgImage) {
+          body.style.backgroundColor = '#fcfcfc'
+          html.style.backgroundColor = '#fcfcfc'
+        } else {
+          body.style.backgroundColor = 'transparent'
+          html.style.backgroundColor = 'transparent'
+        }
+      }
+
+      /**
+       * Presets = panneau « Effet des pages » (pageEffect). Quatre profils calquent les échantillons Turn.js 4 :
+       * notebook → samples/basic, magazine → samples/magazine, book → samples/docs, album → samples/double-page
+       * (mêmes elevation / gradients / duration / acceleration que leurs index.html).
+       */
+      function turnStyleFromPageEffect(pageEffect, forceSingle) {
+        var pe =
+          typeof pageEffect === 'string' && pageEffect.trim()
+            ? pageEffect.trim()
+            : 'notebook'
+        var presets = {
+          magazine: {
+            elevation: 50,
+            gradients: true,
+            duration: 1000,
+            acceleration: true,
+            turnCorners: 'bl,br',
+          },
+          book: {
+            elevation: 50,
+            gradients: true,
+            duration: 1000,
+            acceleration: false,
+            turnCorners: 'bl,br',
+          },
+          album: {
+            elevation: 50,
+            gradients: true,
+            duration: 600,
+            acceleration: true,
+            turnCorners: 'bl,br',
+          },
+          notebook: {
+            elevation: 50,
+            gradients: true,
+            duration: 600,
+            acceleration: true,
+            turnCorners: 'bl,br',
+          },
+          slider: {
+            elevation: 22,
+            gradients: false,
+            duration: 380,
+            acceleration: true,
+            turnCorners: 'br',
+          },
+          cards: {
+            elevation: 64,
+            gradients: true,
+            duration: 720,
+            acceleration: true,
+            turnCorners: 'tl,tr,bl,br',
+          },
+          coverflow: {
+            elevation: 76,
+            gradients: true,
+            duration: 780,
+            acceleration: true,
+            turnCorners: 'bl,br',
+          },
+          one_page: {
+            elevation: 14,
+            gradients: false,
+            duration: 320,
+            acceleration: true,
+            turnCorners: 'br',
+          },
+        }
+        var p = presets[pe] || presets.notebook
+        if (forceSingle) {
+          return {
+            elevation: Math.max(8, Math.floor(p.elevation * 0.5)),
+            gradients: false,
+            duration: Math.max(260, Math.floor(p.duration * 0.82)),
+            acceleration: p.acceleration,
+            turnCorners: 'bl,br',
+          }
+        }
+        return p
+      }
+
+      var PAGE_TURN_KEYS = [
+        'soundOnTurn',
+        'pageEdges',
+        'rtlRead',
+        'showPageDepth',
+        'showPageShadow',
+        'roundedCorners',
+        'centerWhenSingle',
+      ]
+
+      var wheelNavigationEnabled = true
+      var wheelDeltaBuffer = 0
+      var lastWheelInputAt = 0
+      var lastWheelTurnAt = 0
+      var wheelNavigationCooldownMs = 520
+      var WHEEL_NAV_THRESHOLD_PX = 64
+      var WHEEL_NAV_BUFFER_RESET_MS = 260
+
+      function defaultPageTurnOpts() {
+        return {
+          soundOnTurn: true,
+          pageEdges: true,
+          rtlRead: false,
+          showPageDepth: true,
+          showPageShadow: true,
+          roundedCorners: false,
+          centerWhenSingle: true,
+        }
+      }
+
+      function normalizePageTurnOpts(raw) {
+        var d = defaultPageTurnOpts()
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return d
+        for (var i = 0; i < PAGE_TURN_KEYS.length; i++) {
+          var k = PAGE_TURN_KEYS[i]
+          if (Object.prototype.hasOwnProperty.call(raw, k) && typeof raw[k] === 'boolean') {
+            d[k] = raw[k]
+          }
+        }
+        return d
+      }
+
+      function playShortPageTurnSound() {
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext
+          if (!AC) return
+          var ctx = new AC()
+          var o = ctx.createOscillator()
+          var g = ctx.createGain()
+          o.type = 'sine'
+          o.frequency.value = 740
+          g.gain.value = 0.035
+          o.connect(g)
+          g.connect(ctx.destination)
+          o.start()
+          window.setTimeout(function () {
+            try {
+              o.stop()
+              ctx.close()
+            } catch (_e1) {}
+          }, 55)
+        } catch (_e2) {}
+      }
+
+      function normalizeWheelDelta(ev) {
+        var delta =
+          Math.abs(ev.deltaY) >= Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX
+        if (ev.deltaMode === 1) delta *= 16
+        if (ev.deltaMode === 2) delta *= window.innerHeight || 600
+        return delta
+      }
+
+      function navigateFlipbook(direction) {
+        var $fb = $('.flipbook')
+        if (!$fb || !$fb.length || typeof $fb.turn !== 'function') return false
+        try {
+          if (direction === 'previous') {
+            $fb.turn('previous')
+            return true
+          }
+          if (direction === 'next') {
+            $fb.turn('next')
+            return true
+          }
+        } catch (_e3) {
+          /* flipbook pas encore pret */
+        }
+        return false
+      }
+
+      function onWheelNavigate(ev) {
+        if (!wheelNavigationEnabled) return
+
+        var $fb = $('.flipbook')
+        if (!$fb || !$fb.length || typeof $fb.turn !== 'function') return
+
+        var delta = normalizeWheelDelta(ev)
+        if (!delta) return
+
+        ev.preventDefault()
+
+        var now = Date.now()
+        if (now - lastWheelInputAt > WHEEL_NAV_BUFFER_RESET_MS) {
+          wheelDeltaBuffer = 0
+        }
+        lastWheelInputAt = now
+
+        if (now - lastWheelTurnAt < wheelNavigationCooldownMs) return
+
+        wheelDeltaBuffer += delta
+        if (Math.abs(wheelDeltaBuffer) < WHEEL_NAV_THRESHOLD_PX) return
+
+        var direction = wheelDeltaBuffer > 0 ? 'next' : 'previous'
+        wheelDeltaBuffer = 0
+        if (navigateFlipbook(direction)) {
+          lastWheelTurnAt = now
+        }
+      }
+
+      function applyFlip(imageUrls, w, h, displayMode, appearance, pageEffect, pageTurnSettings) {
+        var optsW = typeof w === 'number' && w > 0 ? Math.floor(w) : 922
+        var optsH = typeof h === 'number' && h > 0 ? Math.floor(h) : 600
+        /** Largeur min. pour une double page lisible ; sinon une seule page (Turn.js reste actif). */
+        var minDoubleSpreadW = 520
+        var optsDisplay =
+          optsW < minDoubleSpreadW
+            ? 'single'
+            : displayMode === 'single'
+              ? 'single'
+              : 'double'
+        var forceSingle = optsDisplay === 'single'
+        var pageEffectKey =
+          typeof pageEffect === 'string' && pageEffect.trim()
+            ? pageEffect.trim()
+            : 'notebook'
+        var turnStyle = turnStyleFromPageEffect(pageEffect, forceSingle)
+        wheelNavigationCooldownMs = Math.max(
+          360,
+          Math.min(1000, Math.floor(turnStyle.duration * 0.72))
+        )
+        var ts = normalizePageTurnOpts(pageTurnSettings)
+        var pageWidth = optsDisplay === 'single' ? optsW : Math.floor(optsW / 2)
+        var currentPage = 1
+
+        $('.flipbook-viewport').removeClass('flip-rounded-pages')
+
+        $('.flipbook-viewport .flipbook').css({
+          width: optsW + 'px',
+          height: optsH + 'px',
+          left: -optsW / 2 + 'px',
+          top: -optsH / 2 + 'px',
+        })
+
+        var $fb = $('.flipbook')
+        try {
+          if (typeof $fb.turn === 'function') currentPage = $fb.turn('page') || 1
+          if (typeof $fb.turn === 'function') $fb.turn('destroy')
+        } catch (_e) {
+          /* aucun flip encore */
+        }
+
+        try {
+          $fb.off()
+        } catch (_e2) {}
+
+        $fb.empty()
+
+        if (!imageUrls.length) {
+          if (appearance) applyEditorChrome(appearance)
+          return
+        }
+
+        if (appearance) applyEditorChrome(appearance)
+
+        for (var i = 0; i < imageUrls.length; i++) {
+          var url = imageUrls[i]
+          var safe = typeof url === 'string' ? url : ''
+          $('<div />')
+            .css('background-image', 'url(' + JSON.stringify(safe) + ')')
+            .css('width', pageWidth + 'px')
+            .css('height', optsH + 'px')
+            .css('background-repeat', 'no-repeat')
+            .css('background-position', 'center top')
+            .css('background-size', 'contain')
+            .css('background-color', '#fff')
+            .appendTo($fb)
+        }
+
+        var elevTurn =
+          ts.showPageDepth !== false
+            ? turnStyle.elevation
+            : Math.max(6, Math.floor(turnStyle.elevation * 0.48))
+        var gradTurn = turnStyle.gradients && ts.showPageShadow !== false
+        var cornersTurn = ts.pageEdges !== false ? turnStyle.turnCorners : 'br'
+        var accelerationTurn = turnStyle.acceleration
+        if (pageEffectKey === 'magazine') {
+          accelerationTurn = !isChrome()
+        }
+        var turnCfg = {
+          width: optsW,
+          height: optsH,
+          elevation: elevTurn,
+          gradients: gradTurn,
+          duration: turnStyle.duration,
+          acceleration: accelerationTurn,
+          turnCorners: cornersTurn,
+          direction: ts.rtlRead ? 'rtl' : 'ltr',
+          autoCenter: ts.centerWhenSingle !== false,
+          display: optsDisplay,
+        }
+        if (ts.soundOnTurn) {
+          turnCfg.when = {
+            turned: function () {
+              playShortPageTurnSound()
+            },
+          }
+        }
+        $fb.turn(turnCfg)
+
+        if (ts.roundedCorners) {
+          $('.flipbook-viewport').addClass('flip-rounded-pages')
+        }
+
+        try {
+          var maxPage = imageUrls.length
+          var safePage = Math.max(1, Math.min(currentPage, maxPage))
+          $fb.turn('page', safePage)
+        } catch (_e4) {}
+      }
+
+      window.addEventListener(
+        'wheel',
+        onWheelNavigate,
+        { passive: false }
+      )
+
+      window.addEventListener(
+        'message',
+        function (ev) {
+          if (window.location.origin && ev.origin !== window.location.origin) return
+          var d = ev.data
+          if (d == null || typeof d !== 'object') return
+          if (d.channel !== 'ag-editor-flipbook') return
+          if (d.type === 'pages') {
+            if (!Array.isArray(d.urls)) return
+            if (typeof d.wheelNavigationEnabled === 'boolean') {
+              wheelNavigationEnabled = d.wheelNavigationEnabled
+            }
+            applyFlip(
+              d.urls,
+              d.flipWidth,
+              d.flipHeight,
+              d.displayMode,
+              d.appearance,
+              d.pageEffect,
+              d.pageTurnSettings,
+            )
+            return
+          }
+          if (d.type === 'appearance') {
+            applyEditorChrome({
+              backgroundColor: d.backgroundColor,
+              backgroundImage: d.backgroundImage,
+            })
+            return
+          }
+          if (d.type === 'navigate') {
+            var dir = d.direction
+            navigateFlipbook(dir)
+            return
+          }
+          if (d.type === 'goToPage') {
+            var $fb2 = $('.flipbook')
+            if (!$fb2 || !$fb2.length || typeof $fb2.turn !== 'function') return
+            var maxP = 1
+            try {
+              maxP = $fb2.turn('pages') || 1
+            } catch (_e5) {
+              return
+            }
+            var raw = d.page
+            var p = typeof raw === 'number' ? raw : parseInt(String(raw), 10)
+            if (!isFinite(p)) return
+            p = Math.max(1, Math.min(Math.floor(p), maxP))
+            try {
+              $fb2.turn('page', p)
+            } catch (_e6) {
+              /* page hors plage ou flip pas prêt */
+            }
+          }
+        },
+        false,
+      )
+    </script>
+  </body>
+</html>

@@ -1,0 +1,41 @@
+src/
+  app.ts                 # configure Express (middlewares, routes), exporte `app`
+  server.ts              # listen(PORT) — pour tests : importer `app` sans écouter
+  config/
+    env.ts               # validation des variables (ex. zod) : DATABASE_URL, JWT_SECRET…
+  lib/
+    prisma.ts            # `export const prisma = new PrismaClient()` + graceful shutdown
+    logger.ts
+    errors.ts            # classes AppError, codes HTTP
+  middleware/
+    auth.ts              # JWT session ou validation SSO (selon ton choix)
+    requireRole.ts       # AppRole : ADMIN | EDITOR | VIEWER
+    errorHandler.ts      # (err, req, res, next) → JSON homogène
+    requestId.ts
+  routes/
+    index.ts             # monte /api/v1/...
+    v1/
+      health.routes.ts
+      publications.routes.ts
+      uploads.routes.ts
+      jobs.routes.ts
+      viewer.routes.ts   # endpoints lecture (souvent auth + URLs signées)
+  controllers/
+    publications.controller.ts
+    uploads.controller.ts
+    jobs.controller.ts
+  services/
+    publication.service.ts
+    upload.service.ts
+    conversion.service.ts
+    audit.service.ts
+  repositories/          # optionnel
+    publication.repository.ts
+  validators/            # schémas zod par route
+    publication.schemas.ts
+  types/
+    express.d.ts         # étendre Request avec `user`
+  jobs/                    # utilisé par le worker
+    processConversion.ts
+
+worker.ts                  # point d’entrée worker (BullMQ / pg-boss / etc.)
