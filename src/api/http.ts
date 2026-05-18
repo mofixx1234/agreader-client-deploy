@@ -29,7 +29,7 @@ import type{
 // ENV
 // =========================================================
 
-const rawApiBaseUrl = "http://81.0.220.161:4001/api/v1"
+const rawApiBaseUrl = "http://81.0.220.161:4000/api/v1"
 // const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 const API_BASE_URL = (rawApiBaseUrl || '/api/v1').replace(/\/+$/, '')
 
