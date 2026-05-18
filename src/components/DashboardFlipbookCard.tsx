@@ -46,6 +46,30 @@ function MenuRow({ Icon, label, onClick, to }: MenuRowProps) {
   );
 }
 
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (window.isSecureContext && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error("Clipboard copy failed");
+  }
+}
+
 type DashboardFlipbookCardProps = {
   doc: DocumentItem;
   formatDocDate: (iso: string) => string;
@@ -79,7 +103,7 @@ export function DashboardFlipbookCard({
         toast.info("Aucun lien public disponible pour ce document");
         return;
       }
-      await navigator.clipboard.writeText(url);
+      await copyTextToClipboard(url);
       toast.success("Lien copié dans le presse-papiers");
     } catch {
       toast.error("Impossible de copier le lien");
@@ -102,7 +126,7 @@ export function DashboardFlipbookCard({
         return;
       }
 
-      await navigator.clipboard.writeText(url);
+      await copyTextToClipboard(url);
       toast.success("Lien public copié (partage non supporté sur ce navigateur)");
     } catch {
       toast.error("Impossible de partager ce lien");
