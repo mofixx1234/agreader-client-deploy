@@ -10,7 +10,9 @@ COPY . .
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
-RUN npm run build
+RUN npm run build \
+  && test -f dist/turnjs4/samples/editor-dynamic/index.html \
+  && test -f dist/turnjs4/lib/turn.min.js
 
 FROM node:22-alpine AS runner
 

@@ -417,10 +417,20 @@
         { passive: false }
       )
 
+      function getTrustedParentOrigin() {
+        var origin = window.location.origin
+        if (origin && origin !== 'null') return origin
+        try {
+          if (document.referrer) return new URL(document.referrer).origin
+        } catch (_e5) {}
+        return ''
+      }
+
       window.addEventListener(
         'message',
         function (ev) {
-          if (window.location.origin && ev.origin !== window.location.origin) return
+          var trustedOrigin = getTrustedParentOrigin()
+          if (trustedOrigin && ev.origin !== trustedOrigin) return
           var d = ev.data
           if (d == null || typeof d !== 'object') return
           if (d.channel !== 'ag-editor-flipbook') return

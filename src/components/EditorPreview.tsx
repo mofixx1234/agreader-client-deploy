@@ -28,6 +28,7 @@ import { useDebouncedValue } from '../lib/useDebouncedValue'
 import { useOptionalEditorCustomization } from './draggable/EditorCustomizationContext'
 import { backgroundEditorPresets } from './draggable/background/backgroundEditorAssets'
 import { mergePageTurnSettings, type PageTurnSettings } from '../lib/pageTurnSettings'
+import editorDynamicIframeHtml from '../../turnjs4/samples/editor-dynamic/index.html?raw'
 
 function resolveStoredBackgroundImageUrl(
   raw: string | null | undefined,
@@ -131,8 +132,12 @@ const BASIC_FLIP_H = 600
 const SINGLE_PAGE_W = 461
 const SINGLE_PAGE_H = 600
 
-const IFRAME_PATH = `/turnjs4/samples/editor-dynamic/index.html`
 const MESSAGE_CHANNEL = 'ag-editor-flipbook'
+
+const IFRAME_HTML = editorDynamicIframeHtml.replace(
+  '<head>',
+  '<head>\n    <base href="/turnjs4/samples/editor-dynamic/" />',
+)
 
 function absolutizeAssetUrl(url: string): string {
   const u = url.trim()
@@ -190,7 +195,7 @@ export function EditorPreview({
           ? appearance.backgroundImage.trim()
           : null,
     }),
-    [appearance?.backgroundColor, appearance?.backgroundImage],
+    [appearance],
   )
 
   const previewSurfaceStyle = useMemo(
@@ -212,14 +217,17 @@ export function EditorPreview({
   const wrapRef = useRef<HTMLDivElement>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [thumbnailsOpen, setThumbnailsOpen] = useState(false)
-  const [fullscreenEl, setFullscreenEl] = useState<Element | null>(null)
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
   const [frameReady, setFrameReady] = useState(false)
   const [rawSize, setRawSize] = useState({ w: BASIC_FLIP_W, h: BASIC_FLIP_H })
   const [containerWidth, setContainerWidth] = useState(BASIC_FLIP_W)
 
   const flipReady = !isPending && !isError && sortedPages.length > 0
   const appearanceRef = useRef(appearance)
-  appearanceRef.current = appearance
+
+  useEffect(() => {
+    appearanceRef.current = appearance
+  }, [appearance])
 
   useEffect(() => {
     if (!flipReady) return
@@ -359,7 +367,9 @@ export function EditorPreview({
   }, [])
 
   useEffect(() => {
-    const onFs = () => setFullscreenEl(document.fullscreenElement)
+    const onFs = () => {
+      setIsPreviewFullscreen(document.fullscreenElement === wrapRef.current)
+    }
     document.addEventListener('fullscreenchange', onFs)
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
@@ -371,7 +381,7 @@ export function EditorPreview({
 
   const downloadHref = pdfUrl ? absolutizeAssetUrl(pdfUrl) : null
   const downloadName =
-    downloadFileName?.replace(/[^\w.\- ()\[\]]+/g, '_').trim() || 'document.pdf'
+    downloadFileName?.replace(/[^\w.\- ()[\]]+/g, '_').trim() || 'document.pdf'
 
   useEffect(() => {
     if (!frameReady || !imageUrls.length) return
@@ -561,7 +571,7 @@ export function EditorPreview({
               {permissions.allowFullscreen && (
                 <button
                   type="button"
-                  aria-label={fullscreenEl === wrapRef.current ? 'Quitter le plein écran' : 'Plein écran'}
+                  aria-label={isPreviewFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
                   onClick={toggleFullscreen}
                   className="rounded-lg p-2 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff3301]/40"
                 >
@@ -614,7 +624,7 @@ export function EditorPreview({
           <iframe
             ref={iframeRef}
             title="Flipbook Turn.js — pages document"
-            src={IFRAME_PATH}
+            srcDoc={IFRAME_HTML}
             onLoad={() => {
               setFrameReady(true)
               queueMicrotask(() => pushPagesToIframe())

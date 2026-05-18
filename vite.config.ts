@@ -46,7 +46,7 @@ function serveTurnjs4Book(): Connect.NextHandleFunction {
     let rel = pathname.replace(/^\/turnjs4\/?/, '')
     if (!rel) rel = ''
 
-    let abs =
+    const abs =
       path.extname(rel) === '' ? path.resolve(turnRoot, rel || '.', 'index.html') : path.resolve(turnRoot, rel)
 
     const normTurn = path.resolve(turnRoot) + path.sep
@@ -81,14 +81,21 @@ export default defineConfig({
       configurePreviewServer(server) {
         server.middlewares.use(serveTurnjs4Book())
       },
-      closeBundle() {
-        try {
-          const dist = path.join(bookDir, 'dist')
-          if (!fs.existsSync(dist)) return
-          const outDir = path.join(dist, 'turnjs4')
-          fs.cpSync(turnRoot, outDir, { recursive: true })
-        } catch {
-          /* noop */
+      writeBundle() {
+        const dist = path.join(bookDir, 'dist')
+        if (!fs.existsSync(dist)) return
+        const outDir = path.join(dist, 'turnjs4')
+        fs.rmSync(outDir, { recursive: true, force: true })
+        fs.cpSync(turnRoot, outDir, { recursive: true })
+
+        const requiredViewer = path.join(
+          outDir,
+          'samples',
+          'editor-dynamic',
+          'index.html',
+        )
+        if (!fs.existsSync(requiredViewer)) {
+          throw new Error(`Turn.js viewer was not copied to ${requiredViewer}`)
         }
       },
     },

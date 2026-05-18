@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  api:
+    image: thisyannhallage/agreader-api:latest
+    container_name: agreader-api
+    restart: always
+    ports:
+      - "4001:4001"
+    environment:
+      NODE_ENV: "production"
+      PORT: "4001"
+      DATABASE_URL: "postgresql://postgres.qqvhuptfofurvllphoty:Acredi.Group%402026@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=no-verify"
+      DIRECT_URL: "postgresql://postgres.qqvhuptfofurvllphoty:Acredi.Group%402026@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=no-verify"
+      SUPABASE_URL: "https://qqvhuptfofurvllphoty.supabase.co"
+      SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxdmh1cHRmb2Z1cnZsbHBob3R5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODA0NzUzMSwiZXhwIjoyMDkzNjIzNTMxfQ.YTqfEZ7M3mm6X0ceegjpJqNChZDjLlVeHyZOZkDLWIw"
+      SUPABASE_BUCKET: "documents"
+      ALLOWED_MIME_TYPES: "application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    networks:
+      - api_network
+
+frontend:
+  image: thisyannhallage/agreader-client-deploy:client-book
+  container_name: agreader-client
+  restart: always
+  ports:
+    - "7000:4173"
+  depends_on:
+    - api
+  networks:
+    - api_network
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower-agreader-api
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_API_VERSION=1.40
+    command: --interval 30 --cleanup
+    networks:
+      - api_network
+
+networks:
+  api_network:
+    driver: bridge
